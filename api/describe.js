@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
   if (!GEMINI_API_KEY) {
-    return res.status(500).json({ error: "GEMINI_API_KEY not set in Vercel" });
+    return res.status(500).json({ error: "GEMINI_API_KEY not set in Vercel environment variables" });
   }
 
   try {
@@ -31,26 +31,20 @@ export default async function handler(req, res) {
     let metaDescription = null;
 
     for (const page of pagesToTry) {
+
       try {
 
         const response = await fetch(page, {
-          headers: { "User-Agent": "Mozilla/5.0" },
-          timeout: 8000
+          headers: { "User-Agent": "Mozilla/5.0" }
         });
 
         if (!response.ok) continue;
 
         const html = await response.text();
 
-        // Extract meta description
         if (!metaDescription) {
-          const metaMatch = html.match(
-            /<meta\s+name=["']description["']\s+content=["']([^"]+)["']/i
-          );
-
-          if (metaMatch && metaMatch[1]) {
-            metaDescription = metaMatch[1];
-          }
+          const metaMatch = html.match(/<meta\s+name=["']description["']\s+content=["']([^"]+)["']/i);
+          if (metaMatch && metaMatch[1]) metaDescription = metaMatch[1];
         }
 
         const cleaned = html
@@ -62,29 +56,20 @@ export default async function handler(req, res) {
 
         collectedText += cleaned + "\n";
 
-      } catch (e) {
-        continue;
-      }
+      } catch (e) {}
     }
 
-    // If meta description is good, return immediately
     if (metaDescription && metaDescription.length > 50) {
-      return res.status(200).json({
-        description: metaDescription
-      });
+      return res.status(200).json({ description: metaDescription });
     }
 
     collectedText = collectedText.slice(0, 12000);
 
     const prompt = `
-You are writing a company description.
-
-Using the website text below, write a clear 2–3 sentence business description that explains:
+Write a concise 2–3 sentence company description explaining:
 • what the company does
 • who their customers are
-• their main value proposition
-
-Return only the description text.
+• their value proposition
 
 Website content:
 ${collectedText}
@@ -98,11 +83,7 @@ ${collectedText}
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: prompt }]
-            }
-          ]
+          contents: [{ parts: [{ text: prompt }] }]
         })
       }
     );
