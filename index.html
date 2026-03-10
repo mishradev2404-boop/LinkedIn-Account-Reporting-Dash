@@ -106,6 +106,37 @@
         .toast.show { transform: translateY(0); opacity: 1; }
         .toast.err { background: rgba(180,40,40,0.92); }
 
+        /* BUSINESS DESCRIPTION */
+        .biz-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--r); padding: 24px 28px; display: none; }
+        .biz-card.visible { display: block; }
+        .biz-header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+        .biz-favicon { width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+        .biz-favicon img { width: 20px; height: 20px; object-fit: contain; }
+        .biz-site { font-size: 11px; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+        .biz-name { font-size: 15px; font-weight: 700; }
+        .biz-desc { font-size: 14px; color: rgba(255,255,255,0.65); line-height: 1.75; }
+        .biz-desc-loading { display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.35); font-size: 13px; }
+        .biz-dots span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); margin: 0 2px; animation: blink 1.2s infinite; }
+        .biz-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .biz-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+        .biz-edit { margin-left: auto; font-size: 11px; color: rgba(255,255,255,0.3); cursor: pointer; border: none; background: none; font-family: inherit; padding: 4px 10px; border-radius: 6px; }
+        .biz-edit:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6); }
+
+        /* URL MODAL */
+        .url-modal-backdrop { position: fixed; inset: 0; background: rgba(5,9,12,0.85); backdrop-filter: blur(10px); z-index: 9100; display: none; align-items: center; justify-content: center; padding: 20px; }
+        .url-modal-backdrop.open { display: flex; }
+        .url-modal { background: #0d1520; border: 1px solid rgba(0,119,181,0.3); border-radius: 16px; padding: 32px; width: 100%; max-width: 480px; }
+        .url-modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+        .url-modal p { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 22px; line-height: 1.6; }
+        .url-modal label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
+        .url-modal input { width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 12px 14px; color: #fff; font-size: 14px; font-family: inherit; outline: none; margin-bottom: 6px; }
+        .url-modal input:focus { border-color: var(--blue); }
+        .url-modal input::placeholder { color: rgba(255,255,255,0.25); }
+        .url-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+        .btn-skip { height: 40px; padding: 0 18px; border-radius: var(--pill); background: transparent; color: rgba(255,255,255,0.4); font-size: 13px; font-weight: 500; border: 1px solid rgba(255,255,255,0.12); font-family: inherit; cursor: pointer; }
+        .btn-skip:hover { color: rgba(255,255,255,0.7); }
+
         @media (max-width: 900px) {
             .layout { padding: 24px 16px; grid-template-columns: 1fr; }
             .kpi-grid { grid-template-columns: repeat(2,1fr); }
@@ -146,6 +177,23 @@
     </div>
 </div>
 
+<!-- URL MODAL -->
+<div class="url-modal-backdrop" id="urlModal">
+    <div class="url-modal">
+        <h3>🌐 Add Business Context</h3>
+        <p>Enter your client's website URL and we'll generate a brief business description to appear at the top of the dashboard report.</p>
+        <label>Website URL</label>
+        <input type="text" id="urlInput" placeholder="https://www.example.com" onkeydown="if(event.key==='Enter') submitUrl()">
+        <div class="url-modal-actions">
+            <button class="btn-skip" onclick="skipUrl()">Skip</button>
+            <button class="btn-primary" onclick="submitUrl()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Generate Description
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- DASHBOARD -->
 <div class="layout" id="dashboard" style="display:none;">
 <main class="main">
@@ -165,6 +213,26 @@
     </header>
 
     <input type="file" id="fileInput" accept=".csv" style="display:none;" onchange="handleFile(event)">
+
+    <!-- BUSINESS DESCRIPTION CARD -->
+    <div class="biz-card" id="bizCard">
+        <div class="biz-header">
+            <div class="biz-favicon" id="bizFavicon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
+            <div>
+                <div class="biz-site" id="bizSite">—</div>
+                <div class="biz-name" id="bizName">—</div>
+            </div>
+            <button class="biz-edit" onclick="openUrlModal()" title="Change website">✎ Edit</button>
+        </div>
+        <div class="biz-desc" id="bizDesc">
+            <div class="biz-desc-loading">
+                <div class="biz-dots"><span></span><span></span><span></span></div>
+                Generating business description…
+            </div>
+        </div>
+    </div>
 
     <div class="account-badge">
         <div class="account-icon">
@@ -381,6 +449,8 @@ function parseCSV(text) {
     document.getElementById('dashboard').style.display = 'grid';
     buildDashboard();
     toast('Loaded ' + rows.length + ' rows across ' + campaigns().length + ' campaigns');
+    // Prompt for website URL after a short delay
+    setTimeout(openUrlModal, 600);
 }
 
 // ── HELPERS ───────────────────────────────────────────────────
@@ -619,6 +689,81 @@ function downloadReport() {
     a.download = 'linkedin-report-'+new Date().toISOString().slice(0,10)+'.csv';
     a.click();
     toast('Report downloaded');
+}
+
+// ── URL MODAL & BUSINESS DESCRIPTION ─────────────────────────
+function openUrlModal() {
+    document.getElementById('urlModal').classList.add('open');
+    setTimeout(function() { document.getElementById('urlInput').focus(); }, 100);
+}
+
+function skipUrl() {
+    document.getElementById('urlModal').classList.remove('open');
+}
+
+function submitUrl() {
+    var url = document.getElementById('urlInput').value.trim();
+    if (!url) { toast('Please enter a website URL', true); return; }
+    if (!url.startsWith('http')) url = 'https://' + url;
+    document.getElementById('urlModal').classList.remove('open');
+    loadBusinessDescription(url);
+}
+
+function loadBusinessDescription(url) {
+    var card = document.getElementById('bizCard');
+    card.classList.add('visible');
+
+    // Show domain name and favicon
+    var domain;
+    try { domain = new URL(url).hostname.replace('www.', ''); } catch(e) { domain = url; }
+    document.getElementById('bizSite').textContent = domain;
+    document.getElementById('bizName').textContent = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
+    document.getElementById('bizFavicon').innerHTML = '<img src="https://www.google.com/s2/favicons?domain=' + domain + '&sz=32" onerror="this.style.display=\'none\'">';
+
+    // Show loading state
+    document.getElementById('bizDesc').innerHTML =
+        '<div class="biz-desc-loading"><div class="biz-dots"><span></span><span></span><span></span></div>Researching ' + domain + '…</div>';
+
+    // Call Claude API
+    fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1000,
+            tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+            messages: [{
+                role: 'user',
+                content: 'Search for information about the company at ' + url + '. Then write a concise 2-3 sentence business description covering: what the company does, who their target customers are, and their key value proposition. Be specific and factual. Return only the description text, no headers or labels.'
+            }]
+        })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        var text = '';
+        if (data.content) {
+            for (var i = 0; i < data.content.length; i++) {
+                if (data.content[i].type === 'text') text += data.content[i].text;
+            }
+        }
+        text = text.trim();
+        if (!text) throw new Error('No description returned');
+
+        // Also try to extract company name from description
+        document.getElementById('bizDesc').textContent = text;
+
+        // Try to get a better company name from first sentence
+        var firstSentence = text.split('.')[0];
+        var nameMatch = firstSentence.match(/^([A-Z][A-Za-z0-9\s&.,'-]{1,40}?)(?:\s+is\s|\s+provides\s|\s+offers\s|\s+helps\s|\s+specializes)/);
+        if (nameMatch) {
+            document.getElementById('bizName').textContent = nameMatch[1].trim();
+        }
+    })
+    .catch(function(err) {
+        console.error('Business description error:', err);
+        document.getElementById('bizDesc').innerHTML =
+            '<span style="color:rgba(255,255,255,0.35);font-size:13px;">Could not load description. <button onclick="loadBusinessDescription(\'' + url + '\')" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:13px;font-family:inherit;text-decoration:underline;">Retry</button></span>';
+    });
 }
 
 // ── TOAST ─────────────────────────────────────────────────────
