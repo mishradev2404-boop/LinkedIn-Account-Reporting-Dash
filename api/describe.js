@@ -1,54 +1,134 @@
 export default async function handler(req, res) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-    if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
 
-    const { url } = req.body || {};
-    if (!url) { res.status(400).json({ error: 'Missing url' }); return; }
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) { res.status(500).json({ error: 'ANTHROPIC_API_KEY not set in Vercel environment variables' }); return; }
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-    try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-beta': 'web-search-2025-03-05'
-            },
-            body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 1000,
-                tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-                messages: [{
-                    role: 'user',
-                    content: 'Search for information about the company at ' + url + '. Write a concise 2-3 sentence business description: what they do, who their customers are, and their key value proposition. Return only the description text with no headers, labels, or markdown.'
-                }]
-            })
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ error: "Missing url" });
+
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: "GEMINI_API_KEY not set in Vercel" });
+  }
+
+  try {
+
+    const baseUrl = new URL(url).origin;
+
+    const pagesToTry = [
+      url,
+      `${baseUrl}/about`,
+      `${baseUrl}/about-us`,
+      `${baseUrl}/company`,
+      `${baseUrl}/who-we-are`
+    ];
+
+    let collectedText = "";
+    let metaDescription = null;
+
+    for (const page of pagesToTry) {
+      try {
+
+        const response = await fetch(page, {
+          headers: { "User-Agent": "Mozilla/5.0" },
+          timeout: 8000
         });
 
-        const data = await response.json();
-        if (!response.ok) {
-            res.status(response.status).json({ error: data.error?.message || 'Anthropic API error' });
-            return;
+        if (!response.ok) continue;
+
+        const html = await response.text();
+
+        // Extract meta description
+        if (!metaDescription) {
+          const metaMatch = html.match(
+            /<meta\s+name=["']description["']\s+content=["']([^"]+)["']/i
+          );
+
+          if (metaMatch && metaMatch[1]) {
+            metaDescription = metaMatch[1];
+          }
         }
 
-        // Extract all text blocks (web search may produce multiple content blocks)
-        let text = '';
-        if (Array.isArray(data.content)) {
-            for (const block of data.content) {
-                if (block.type === 'text') text += block.text;
-            }
-        }
+        const cleaned = html
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .slice(0, 4000);
 
-        res.status(200).json({ description: text.trim() });
+        collectedText += cleaned + "\n";
 
-    } catch (err) {
-        console.error('API proxy error:', err);
-        res.status(500).json({ error: err.message });
+      } catch (e) {
+        continue;
+      }
     }
+
+    // If meta description is good, return immediately
+    if (metaDescription && metaDescription.length > 50) {
+      return res.status(200).json({
+        description: metaDescription
+      });
+    }
+
+    collectedText = collectedText.slice(0, 12000);
+
+    const prompt = `
+You are writing a company description.
+
+Using the website text below, write a clear 2–3 sentence business description that explains:
+• what the company does
+• who their customers are
+• their main value proposition
+
+Return only the description text.
+
+Website content:
+${collectedText}
+`;
+
+    const aiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ]
+        })
+      }
+    );
+
+    const data = await aiResponse.json();
+
+    if (!aiResponse.ok) {
+      return res.status(aiResponse.status).json({
+        error: data.error?.message || "Gemini API error"
+      });
+    }
+
+    const description =
+      data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    return res.status(200).json({
+      description: description.trim()
+    });
+
+  } catch (err) {
+
+    console.error("Describe API error:", err);
+
+    return res.status(500).json({
+      error: err.message
+    });
+
+  }
 }
